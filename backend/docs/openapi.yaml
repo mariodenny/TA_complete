@@ -1,0 +1,446 @@
+openapi: 3.0.3
+info:
+  title: Soil Monitoring System API
+  version: 1.0.0
+  description: >-
+    API contract for the Flask backend. Keep this file in sync with the registered
+    Flask routes and use it as the shared reference for the React Native client.
+servers:
+  - url: http://localhost:5700
+    description: Local development (use the computer's LAN IP from a physical phone)
+tags:
+  - name: Auth
+  - name: Plants
+  - name: Devices
+  - name: Media
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, username]
+              properties:
+                email: { type: string, format: email, example: user@example.com }
+                password: { type: string, format: password, example: secret123 }
+                username: { type: string, example: Alex }
+      responses:
+        '201':
+          description: User registered
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user_id: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in and get a bearer token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, example: user@example.com }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user_id: { type: integer }
+                          access_token: { type: string }
+                          token_type: { type: string, example: Bearer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/auth/{user_id}/user:
+    get:
+      tags: [Auth]
+      summary: Get a user profile
+      description: This route currently does not require a JWT.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User profile retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            type: object
+                            additionalProperties: true
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset a user's password
+      description: This route currently does not require a JWT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, new_password]
+              properties:
+                email: { type: string, format: email }
+                new_password: { type: string, format: password }
+      responses:
+        '200': { $ref: '#/components/responses/MessageSuccess' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/plants/:
+    get:
+      tags: [Plants]
+      summary: Get plants owned by the logged-in user
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Plants retrieved; an empty list is returned when there are none
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Plant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Plants]
+      summary: Create a plant
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name, location, image]
+              properties:
+                name: { type: string, example: Monstera }
+                location: { type: string, example: Living room }
+                device_id: { type: integer, nullable: true }
+                image: { type: string, format: binary }
+      responses:
+        '201':
+          description: Plant created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          plant_id: { type: integer }
+                          image_url: { type: string, format: uri }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/plants/{plant_id}:
+    parameters:
+      - $ref: '#/components/parameters/PlantId'
+    get:
+      tags: [Plants]
+      summary: Get a plant by ID
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Plant retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Plant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Plants]
+      summary: Update a plant
+      description: Send one or more fields as multipart form data. Omitted fields are unchanged.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                location: { type: string }
+                image: { type: string, format: binary }
+      responses:
+        '200': { $ref: '#/components/responses/MessageSuccess' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Plants]
+      summary: Delete a plant
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/MessageSuccess' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/plants/{user_id}/user:
+    get:
+      tags: [Plants]
+      summary: Get plants for a user ID
+      description: Requires a JWT, but the current handler does not check that the requested user ID belongs to the token.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Plants retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Plant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/plants/{plant_id}/treshold:
+    post:
+      tags: [Plants]
+      summary: Save plant thresholds
+      description: The current route spells threshold as `treshold` and accepts form fields.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PlantId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                soil_humidity: { type: number, nullable: true }
+                temp_c: { type: number, nullable: true }
+                lux: { type: number, nullable: true }
+      responses:
+        '200': { $ref: '#/components/responses/MessageSuccess' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/devices/:
+    post:
+      tags: [Devices]
+      summary: Register a device for the logged-in user
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, location, mac_address]
+              properties:
+                name: { type: string }
+                location: { type: string }
+                mac_address: { type: string }
+      responses:
+        '201':
+          description: Device created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          device_id: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/devices/test:
+    get:
+      tags: [Devices]
+      summary: Test the protected devices blueprint
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/MessageSuccess' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/devices/{device_id}:
+    get:
+      tags: [Devices]
+      summary: Get a device and its sensors by ID
+      description: Returns a list of rows, with device fields repeated for each associated sensor.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Device and its sensors retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DeviceSensorRow'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /media/plants/{filename}:
+    get:
+      tags: [Media]
+      summary: Fetch a plant image
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Image bytes
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/gif: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '404': { description: Image not found or unsupported extension }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    PlantId:
+      name: plant_id
+      in: path
+      required: true
+      schema: { type: integer }
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema: { type: integer }
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: Operation successful }
+        data: {}
+      required: [success, message, data]
+    Plant:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        device_id: { type: integer, nullable: true }
+        name: { type: string }
+        location: { type: string }
+        image_url: { type: string, format: uri }
+        humidity: { type: number, nullable: true }
+        temp_c: { type: number, nullable: true }
+        soil_condition: { type: number, nullable: true }
+        lux_value: { type: number, nullable: true }
+        created_at: { type: string, format: date-time }
+    DeviceSensorRow:
+      type: object
+      properties:
+        device_id: { type: integer }
+        device_name: { type: string }
+        device_location: { type: string }
+        mac_address: { type: string }
+        ip_address: { type: string, nullable: true }
+        user_id: { type: integer }
+        is_online: { type: boolean }
+        device_created_at: { type: string, format: date-time }
+        sensor_id: { type: integer, nullable: true }
+        sensor_type: { type: string, nullable: true, enum: [ldr_value, humidity_and_temperature, soil_moisture, lux_value] }
+        sensor_name: { type: string, nullable: true }
+        sensor_created_at: { type: string, format: date-time, nullable: true }
+    ApiError:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+        error: {}
+        data: { type: object, nullable: true }
+      required: [success, message, error, data]
+  responses:
+    MessageSuccess:
+      description: Operation successful
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiResponse' }
+    BadRequest:
+      description: Invalid or missing input
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Unauthorized:
+      description: Missing, invalid, or expired bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Conflict:
+      description: Resource conflicts with existing data
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    ServerError:
+      description: Server error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }

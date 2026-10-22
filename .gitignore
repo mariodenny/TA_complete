@@ -1,0 +1,71 @@
+# Shared local secrets and environment configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors and IDEs
+/.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Frontend: Expo / React Native / TypeScript
+/frontend/node_modules/
+/frontend/.expo/
+/frontend/dist/
+/frontend/web-build/
+/frontend/coverage/
+/frontend/expo-env.d.ts
+/frontend/android/
+/frontend/ios/
+/frontend/.metro-health-check*
+/frontend/npm-debug.*
+/frontend/yarn-debug.*
+/frontend/yarn-error.*
+/frontend/*.tsbuildinfo
+/frontend/.env*.local
+/frontend/*.pem
+/frontend/*.jks
+/frontend/*.p8
+/frontend/*.p12
+/frontend/*.key
+/frontend/*.mobileprovision
+
+# Backend: Python environments, bytecode, and tool caches
+/backend/venv/
+/backend/.venv/
+/backend/__pycache__/
+/backend/**/__pycache__/
+*.py[cod]
+/backend/.pytest_cache/
+/backend/.mypy_cache/
+/backend/.ruff_cache/
+/backend/.coverage
+/backend/htmlcov/
+/backend/build/
+/backend/dist/
+/backend/*.egg-info/
+
+# Backend uploaded plant images are local runtime data; keep the directory placeholder
+/backend/static/uploads/plants/*
+!/backend/static/uploads/plants/.gitkeep
+
+# Local databases and logs
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
+# IoT: PlatformIO build and package cache
+/iot/Soil_monitoring_system/.pio/
