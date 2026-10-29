@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"name": "Soil_monitoring_system",
+			"path": "../iot/Soil_monitoring_system"
+		}
+	],
+	"settings": {}
+}

@@ -1,72 +1,143 @@
-#include<WiFi.h>
-#include<HTTPClient.h>
+#include <WiFi.h>
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 
-
-// WIFI credentials note : use 2.4Ghz wifi only
-#define WIFI_SSID "Ternak Lele"
-#define WIFI_PASSWORD "11221122"
-
+// Use the computer's LAN IPv4 address here (not 127.0.0.1).
+// The broker must have a listener accessible from the ESP32.
+const char *WIFI_SSID = "Ternak Lele";
+const char *WIFI_PASSWORD = "11221122";
+const char *MQTT_HOST = "192.168.1.10"; // TODO: replace with vps ip
+const uint16_t MQTT_PORT = 1883;
+const char *MQTT_USERNAME = ""; // Fill these if Mosquitto authentication is configured.
+const char *MQTT_PASSWORD = "";
+const char *DEVICE_ID = "42"; // TODO: replace with this device's ID from the database
 
 const int soilMoisturePin = 4;
 const int dryValue = 3170;
 const int wetValue = 1250;
+const unsigned long publishIntervalMs = 10000;
+const unsigned long reconnectIntervalMs = 5000;
+
+WiFiClient networkClient;
+PubSubClient mqttClient(networkClient);
+String telemetryTopic;
+String mqttClientId;
+unsigned long lastPublishMs = 0;
+unsigned long lastMqttReconnectAttemptMs = 0;
+unsigned long lastWifiReconnectAttemptMs = 0;
 
 int readSoilMoisture() {
-  int raw = analogRead(soilMoisturePin);
+  const int raw = analogRead(soilMoisturePin);
   return constrain(map(raw, dryValue, wetValue, 0, 100), 0, 100);
 }
 
-bool sendMoistureDataToServer(int percentage) {
+void connectToWifi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println();
+  Serial.print("Connected to WiFi. ESP32 IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+bool connectToMqtt() {
   if (WiFi.status() != WL_CONNECTED) {
     return false;
   }
 
-  HTTPClient http;
-  http.begin("http://your-server.com/api/soil-moisture");
-  http.addHeader("Content-Type", "application/json");
+  Serial.print("Connecting to MQTT broker at ");
+  Serial.print(MQTT_HOST);
+  Serial.print(":");
+  Serial.println(MQTT_PORT);
 
-  DynamicJsonDocument doc(1024);
-  doc["moisture"] = percentage;
+  bool connected;
+  if (MQTT_USERNAME[0] != '\0') {
+    connected = mqttClient.connect(
+      mqttClientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD
+    );
+  } else {
+    connected = mqttClient.connect(mqttClientId.c_str());
+  }
 
-  String requestBody;
-  serializeJson(doc, requestBody);
+  if (connected) {
+    Serial.println("Connected to MQTT broker.");
+  } else {
+    Serial.print("MQTT connection failed, state=");
+    Serial.println(mqttClient.state());
+  }
+  return connected;
+}
 
-  int httpResponseCode = http.POST(requestBody);
-  http.end();
+void publishSoilMoisture(int percentage) {
+  JsonDocument doc;
+  doc["moisture_percent"] = percentage;
 
-  return httpResponseCode == HTTP_CODE_OK;
+  String payload;
+  serializeJson(doc, payload);
+
+  if (mqttClient.publish(telemetryTopic.c_str(), payload.c_str())) {
+    Serial.print("Published to ");
+    Serial.print(telemetryTopic);
+    Serial.print(": ");
+    Serial.println(payload);
+  } else {
+    Serial.println("MQTT publish failed.");
+  }
 }
 
 void setup() {
   Serial.begin(115200);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  if(WiFi.status() != WL_CONNECTED){
-    Serial.println("Connecting to WiFi...");
-    while(WiFi.status() != WL_CONNECTED){
-      delay(1000);
-      Serial.print(".");
-    }
-  }
-  Serial.print("Connected to WiFi. IP address: ");
-  Serial.println(WiFi.localIP());
+
+  telemetryTopic = String("soil/v1/devices/") + DEVICE_ID + "/telemetry";
+  mqttClientId = String("soil-esp32-") + DEVICE_ID;
+
+  mqttClient.setServer(MQTT_HOST, MQTT_PORT);
+  connectToWifi();
+  connectToMqtt();
 }
 
 void loop() {
-  int percentage = readSoilMoisture();
+  const unsigned long now = millis();
 
-  Serial.print("Moisture: ");
-  Serial.print(percentage);
-  Serial.println("%");
-
-  if (percentage < 30) {
-    Serial.println("Status: Needs water");
-  } else if (percentage < 70) {
-    Serial.println("Status: Moisture OK");
-  } else {
-    Serial.println("Status: Too wet");
+  if (WiFi.status() != WL_CONNECTED) {
+    if (now - lastWifiReconnectAttemptMs >= reconnectIntervalMs) {
+      lastWifiReconnectAttemptMs = now;
+      Serial.println("WiFi disconnected; reconnecting...");
+      WiFi.reconnect();
+    }
+    delay(10);
+    return;
   }
 
-  delay(1000);
+  if (!mqttClient.connected()) {
+    if (now - lastMqttReconnectAttemptMs >= reconnectIntervalMs) {
+      lastMqttReconnectAttemptMs = now;
+      connectToMqtt();
+    }
+  } else {
+    mqttClient.loop();
+  }
+
+  if (now - lastPublishMs >= publishIntervalMs) {
+    lastPublishMs = now;
+    const int percentage = readSoilMoisture();
+
+    Serial.print("Moisture: ");
+    Serial.print(percentage);
+    Serial.println("%");
+
+    if (mqttClient.connected()) {
+      publishSoilMoisture(percentage);
+    } else {
+      Serial.println("Skipping publish because MQTT is disconnected.");
+    }
+  }
+
+  delay(10);
 }
